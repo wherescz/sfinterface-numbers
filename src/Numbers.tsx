@@ -41,6 +41,8 @@ type Cell =
   | { key: string; kind: "digit"; digit: number }
   | { key: string; kind: "mark"; text: string };
 
+type Ghost = { id: string; cell: Cell; left: number };
+
 function cellsFor(
   value: number,
   locale: NumbersProps["locale"],
@@ -119,7 +121,8 @@ export const Numbers = React.forwardRef<HTMLSpanElement, NumbersProps>(function 
   const widthSeat = React.useRef<number | null>(null);
   const widthRun = React.useRef<Animation | null>(null);
 
-  const [leaving, setLeaving] = React.useState<{ cell: Cell; left: number }[]>([]);
+  const [leaving, setLeaving] = React.useState<Ghost[]>([]);
+  const ghostId = React.useRef(0);
 
   const heading = React.useRef<1 | -1>(1);
 
@@ -236,10 +239,10 @@ export const Numbers = React.forwardRef<HTMLSpanElement, NumbersProps>(function 
     });
 
     if (gone.size && !still) {
-      const ghosts: { cell: Cell; left: number }[] = [];
+      const ghosts: Ghost[] = [];
       gone.forEach((cell, key) => {
         const seat = seats.current.get(key);
-        if (seat !== undefined) ghosts.push({ cell, left: seat });
+        if (seat !== undefined) ghosts.push({ id: `${key}#${++ghostId.current}`, cell, left: seat });
       });
       if (ghosts.length) setLeaving((current) => [...current, ...ghosts]);
     }
@@ -357,16 +360,17 @@ export const Numbers = React.forwardRef<HTMLSpanElement, NumbersProps>(function 
         ))}
         {leaving.map((ghost) => (
           <Piece
-            key={`leaving:${ghost.cell.key}`}
+            key={`leaving:${ghost.id}`}
             cell={ghost.cell}
+            ghost={ghost.id}
             glyphs={numerals.glyphs}
             transition={transition}
             generation={generation}
             leaving
             left={ghost.left}
             onDone={() => {
-              spun.current.delete(ghost.cell.key);
-              setLeaving((current) => current.filter((x) => x.cell.key !== ghost.cell.key));
+              spun.current.delete(ghost.id);
+              setLeaving((current) => current.filter((x) => x.id !== ghost.id));
             }}
           />
         ))}
@@ -389,6 +393,7 @@ function Piece({
   from,
   generation,
   leaving,
+  ghost,
   left,
   onDone,
 }: {
@@ -398,13 +403,14 @@ function Piece({
   from?: number;
   generation: number;
   leaving?: boolean;
+  ghost?: string;
   left?: number;
   onDone?: () => void;
 }) {
   const identity = leaving
     ? {
         "data-leaving": "",
-        "data-ghost": cell.key,
+        "data-ghost": ghost,
         style: { left } as React.CSSProperties,
         onAnimationEnd: onDone,
       }
